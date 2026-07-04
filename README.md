@@ -1,6 +1,6 @@
 # Multi-User RAG API
 
-A local Retrieval-Augmented Generation (RAG) API that lets multiple users submit their own personal profiles and get accurate, isolated answers about themselves — all running fully offline using Ollama and ChromaDB.
+A local Retrieval-Augmented Generation (RAG) API that lets multiple users submit their own personal profiles and get accurate, isolated answers about themselves, all running fully offline using Ollama and ChromaDB.
 
 ## What it does
 
@@ -97,4 +97,4 @@ Ask a question, optionally filtered to a specific user.
 
 ## Why local RAG?
 
-Running everything locally (Ollama + ChromaDB) means zero API costs, full data privacy, and no dependency on external services — a good fit for personal or sensitive data use cases.
+Running everything locally (Ollama + ChromaDB) means zero API costs, full data privacy, and no dependency on external services, a good fit for personal or sensitive data use cases.
