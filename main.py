@@ -1,5 +1,7 @@
 from fastapi import FastAPI
-from pydantic import BaseModel  # Pydantic validates incoming request data
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
 import ollama
 import chromadb
 from chromadb.utils.embedding_functions.ollama_embedding_function import (
@@ -8,7 +10,6 @@ from chromadb.utils.embedding_functions.ollama_embedding_function import (
 
 app = FastAPI()
 
-# Connect to the same ChromaDB collection you built in Step 2
 client = chromadb.PersistentClient(path="./chroma_db")
 
 ef = OllamaEmbeddingFunction(
@@ -22,51 +23,76 @@ collection = client.get_or_create_collection(
 )
 
 
-# Define the expected shape of incoming data for the POST endpoint
 class DocumentSubmission(BaseModel):
-    user_name: str  # Who this profile belongs to
-    content: str  # The profile text to store
+    user_name: str
+    content: str
 
 
-@app.post("/documents")  # POST endpoint - accepts data in the request body
+@app.post("/documents")
 def add_document(submission: DocumentSubmission):
-    # Split the submitted profile into chunks by paragraph
     chunks = [chunk.strip() for chunk in submission.content.split("\n\n") if chunk.strip()]
 
-    # Store each chunk in ChromaDB with the user's name attached as metadata
+    if not chunks:
+        return {"error": "No content provided"}
+
     collection.add(
         ids=[f"{submission.user_name}-chunk{i}" for i in range(len(chunks))],
         documents=chunks,
         metadatas=[
             {"source": "profile", "user_name": submission.user_name, "chunk_index": i}
-            for i in range(len(chunks))  # user_name metadata lets us filter by user later
+            for i in range(len(chunks))
         ],
     )
-
     return {
         "message": f"Added {len(chunks)} chunks for user '{submission.user_name}'.",
         "user_name": submission.user_name,
         "chunks_added": len(chunks),
+        "preview": chunks[0],  # first chunk so the user can verify the split looks right
+    }
+
+
+@app.get("/users")  # NEW: list all distinct users currently stored
+def list_users():
+    all_data = collection.get(include=["metadatas"])
+    user_names = sorted(set(m["user_name"] for m in all_data["metadatas"] if "user_name" in m))
+    return {"users": user_names, "count": len(user_names)}
+
+
+@app.delete("/documents/{user_name}")  # NEW: delete a user's entire profile
+def delete_document(user_name: str):
+    existing = collection.get(where={"user_name": user_name})
+
+    if not existing["ids"]:
+        return {"error": f"No profile found for user '{user_name}'"}
+
+    collection.delete(where={"user_name": user_name})
+    return {
+        "message": f"Deleted profile for user '{user_name}'",
+        "chunks_removed": len(existing["ids"]),
     }
 
 
 @app.get("/ask")
-def ask(question: str, user: str = None):  # user is optional, None means search all profiles
-    # Build the query parameters
+def ask(question: str, user: str = None):
     query_params = {
         "query_texts": [question],
         "n_results": 2,
     }
-
-    # If a user name was provided, only search that user's chunks
     if user:
-        query_params["where"] = {"user_name": user}  # ChromaDB metadata filter
+        query_params["where"] = {"user_name": user}
 
-    # Step 1: RETRIEVE - search ChromaDB for the most relevant chunks
-    results = collection.query(**query_params)  # ** unpacks the dictionary as keyword arguments
+    results = collection.query(**query_params)
+
+    if not results["documents"][0]:
+        return {
+            "question": question,
+            "answer": "No relevant profile found.",
+            "context_used": [],
+            "filtered_by_user": user,
+        }
+
     context = "\n\n".join(results["documents"][0])
 
-    # Step 2: AUGMENT - build a prompt that includes the retrieved context
     augmented_prompt = f"""Use the following context to answer the question.
 If the context doesn't contain relevant information, say so.
 
@@ -75,16 +101,23 @@ Context:
 
 Question: {question}"""
 
-    # Step 3: GENERATE - send the augmented prompt to the local LLM
     response = ollama.chat(
         model="qwen2.5:0.5b",
         messages=[{"role": "user", "content": augmented_prompt}],
     )
 
-    # Return the answer along with metadata about the query
     return {
         "question": question,
         "answer": response["message"]["content"],
         "context_used": results["documents"][0],
-        "filtered_by_user": user,  # Shows which user was filtered (or None for all)
+        "filtered_by_user": user,
     }
+
+
+# Serve the simple frontend at the root URL
+@app.get("/")
+def serve_frontend():
+    return FileResponse("static/index.html")
+
+
+app.mount("/static", StaticFiles(directory="static"), name="static")

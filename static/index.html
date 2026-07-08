@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Multi-User RAG API</title>
+<style>
+  body { font-family: Arial, sans-serif; max-width: 700px; margin: 40px auto; padding: 0 20px; background: #f7f7f8; }
+  h1 { font-size: 22px; }
+  h2 { font-size: 17px; margin-top: 40px; }
+  input, textarea { width: 100%; padding: 8px; margin: 6px 0 12px 0; box-sizing: border-box; font-size: 14px; }
+  button { padding: 8px 16px; cursor: pointer; background: #222; color: white; border: none; border-radius: 4px; }
+  button:hover { background: #444; }
+  pre { background: #1e1e1e; color: #d4d4d4; padding: 12px; border-radius: 6px; overflow-x: auto; font-size: 13px; }
+  .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px; }
+</style>
+</head>
+<body>
+
+<h1>Multi-User RAG API</h1>
+<p>Add a profile, then ask questions about it, powered by a local LLM (Ollama) and ChromaDB.</p>
+
+<div class="card">
+  <h2>Add a Profile</h2>
+  <input id="add_user" placeholder="User name (e.g. Biswajit_Boro)">
+  <textarea id="add_content" rows="4" placeholder="Profile text (use a blank line between paragraphs)"></textarea>
+  <button onclick="addProfile()">Add Profile</button>
+  <pre id="add_result"></pre>
+</div>
+
+<div class="card">
+  <h2>Ask a Question</h2>
+  <input id="ask_user" placeholder="User name to filter by (leave blank to search all)">
+  <input id="ask_question" placeholder="Your question">
+  <button onclick="askQuestion()">Ask</button>
+  <pre id="ask_result"></pre>
+</div>
+
+<div class="card">
+  <h2>Registered Users</h2>
+  <button onclick="listUsers()">Refresh List</button>
+  <pre id="users_result"></pre>
+</div>
+
+<script>
+async function addProfile() {
+  const user_name = document.getElementById('add_user').value;
+  const content = document.getElementById('add_content').value;
+  const res = await fetch('/documents', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_name, content })
+  });
+  const data = await res.json();
+  document.getElementById('add_result').textContent = JSON.stringify(data, null, 2);
+}
+
+async function askQuestion() {
+  const user = document.getElementById('ask_user').value;
+  const question = document.getElementById('ask_question').value;
+  let url = `/ask?question=${encodeURIComponent(question)}`;
+  if (user) url += `&user=${encodeURIComponent(user)}`;
+  const res = await fetch(url);
+  const data = await res.json();
+  document.getElementById('ask_result').textContent = JSON.stringify(data, null, 2);
+}
+
+async function listUsers() {
+  const res = await fetch('/users');
+  const data = await res.json();
+  document.getElementById('users_result').textContent = JSON.stringify(data, null, 2);
+}
+
+listUsers();
+</script>
+
+</body>
+</html>

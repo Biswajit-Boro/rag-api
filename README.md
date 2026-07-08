@@ -86,7 +86,7 @@ Ask a question, optionally filtered to a specific user.
 
 ## Video walkthrough
 
-[Watch on YouTube](#) <!-- replace with your video link once uploaded -->
+[https://www.youtube.com/watch?v=E9vVM0labh8] 
 
 ## Possible improvements
 
